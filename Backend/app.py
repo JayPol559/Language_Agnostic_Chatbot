@@ -18,7 +18,7 @@ CORS(app)  # Enable CORS for frontend communication
 DATABASE = 'knowledge_base.db'
 
 def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
