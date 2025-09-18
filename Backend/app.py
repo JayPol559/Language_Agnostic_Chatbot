@@ -98,10 +98,8 @@ def home():
     return "Backend is running. Access the frontend to use the chatbot."
 
 if __name__ == '__main__':
-    # Create the database and tables if they don't exist
-    conn = sqlite3.connect(DATABASE)
-    with open('database/schema.sql') as f:
-        conn.executescript(f.read())
-    conn.close()
+    # Database setup and data ingestion
+    init_db()
+    ingest_data()
     
-    app.run(debug=True)
+    app.run(debug=True, port=8000)
