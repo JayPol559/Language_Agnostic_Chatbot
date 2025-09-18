@@ -15,7 +15,7 @@ from bot_logic.data_processor import process_and_save_pdf, get_document_content_
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-DATABASE = 'database/chatbot.db'
+DATABASE = 'knowledge_base.db'
 
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
