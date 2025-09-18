@@ -2,3 +2,5 @@ Flask
 gunicorn
 google-generativeai
 Flask-Cors
+python-dotenv
+PyPDF2
