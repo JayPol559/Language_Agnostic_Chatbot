@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || ''; // fallback
 
 const Chatbot = () => {
   const [messages, setMessages] = useState([]);
@@ -12,7 +12,7 @@ const Chatbot = () => {
     if (input.trim() === '') return;
 
     const userMessage = { sender: 'user', text: input };
-    setMessages([...messages, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
 
     try {
@@ -28,28 +28,17 @@ const Chatbot = () => {
 
   return (
     <div className="chat-container">
-      <div className="chat-header">
-        <h1>College Chatbot</h1>
-      </div>
+      <div className="chat-header">University Assistant</div>
       <div className="chat-messages">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message ${msg.sender}`}>
-            <span className="message-text">{msg.text}</span>
+        {messages.map((m, idx) => (
+          <div key={idx} className={`msg ${m.sender === 'user' ? 'user' : 'bot'}`}>
+            <div>{m.text}</div>
           </div>
         ))}
       </div>
-      <div className="chat-input-container">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-          className="chat-input"
-          placeholder="Type your question here..."
-        />
-        <button onClick={handleSend} className="chat-send-btn">
-          Send
-        </button>
+      <div className="chat-input">
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask a question..." />
+        <button onClick={handleSend} className="chat-send-btn">Send</button>
       </div>
     </div>
   );
