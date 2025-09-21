@@ -19,6 +19,11 @@ from database import init_db, DATABASE_NAME
 app = Flask(__name__, static_folder=None)
 # For initial testing allow all origins. In production restrict origins.
 CORS(app)
+from flask import Flask, jsonify, request
+from flask_cors import CORS # Yeh line add karen
+
+app = Flask(__name__)
+CORS(app) # Aur yeh line bhi
 
 # Upload config
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
