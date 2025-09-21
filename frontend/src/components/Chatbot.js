@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import '../App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || 'https://language-agnostic-chatbot-1.onrender.com'; // default to your render URL
+// Prefer build-time env REACT_APP_API_URL; if not available, use runtime window.__API_URL__;
+// As a final fallback we keep your Render URL.
+const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || 'https://language-agnostic-chatbot-1.onrender.com';
 
 const Chatbot = () => {
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: "Hello! I'm here to help you with university circulars, notices, and information. What would you like to know?" }
+    { sender: 'bot', text: "Hello! I'm here to help. Ask about circulars, admissions, exams..." }
   ]);
   const [input, setInput] = useState('');
 
@@ -18,13 +20,13 @@ const Chatbot = () => {
     setInput('');
 
     try {
-      const response = await axios.post(`${API_URL}/ask_bot`, { query: input });
-      const botMessage = { sender: 'bot', text: response.data.response || 'No response from server.' };
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
-    } catch (error) {
-      console.error('Error fetching bot response:', error);
+      const resp = await axios.post(`${API_URL}/ask_bot`, { query: input });
+      const botMessage = { sender: 'bot', text: resp?.data?.response || 'No response from server.' };
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (err) {
+      console.error('Error fetching bot response:', err);
       const errorMessage = { sender: 'bot', text: 'Sorry, I am unable to connect to the server.' };
-      setMessages((prevMessages) => [...prevMessages, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
     }
   };
 
