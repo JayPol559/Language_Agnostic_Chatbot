@@ -1,44 +1,59 @@
-import PyPDF2
+import os
 import sqlite3
+from database import DATABASE_NAME
+import PyPDF2
 
-DATABASE = 'database/chatbot.db'
-
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def process_and_save_pdf(file_path, file_name):
+def process_and_save_pdf(file_path, filename):
     """
-    Extracts text from a PDF file and saves it to the database.
+    Extracts text from the PDF and saves it into the Documents table.
+    Returns True on success.
     """
     try:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            text = ""
+        text = ""
+        with open(file_path, "rb") as fh:
+            reader = PyPDF2.PdfReader(fh)
             for page in reader.pages:
-                text += page.extract_text()
-        
-        conn = get_db_connection()
-        conn.execute('INSERT INTO documents (title, content) VALUES (?, ?)', (file_name, text))
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+
+        if not text.strip():
+            print("No extractable text found in PDF.")
+            return False
+
+        conn = sqlite3.connect(DATABASE_NAME)
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO Documents (title, url, content, status) VALUES (?, ?, ?, ?)",
+            (filename, file_path, text, 'uploaded')
+        )
         conn.commit()
         conn.close()
+        print(f"Saved PDF content for {filename}.")
         return True
     except Exception as e:
-        print(f"Error processing PDF: {e}")
+        print("Failed to process PDF:", e)
         return False
 
-def get_document_content_for_query(query):
+
+def get_document_content_for_query(query, max_chars=3000):
     """
-    Fetches relevant document content from the database based on a query.
-    (This is a simple search, can be improved with advanced techniques)
+    Searches Documents for occurrences of `query` and returns a concatenated content snippet.
     """
-    conn = get_db_connection()
-    # Simple search for a keyword match in document titles
-    documents = conn.execute('SELECT content FROM documents WHERE title LIKE ?', (f'%{query}%',)).fetchall()
-    conn.close()
-    
-    if documents:
-        # For simplicity, returning content of the first matching document
-        return documents[0]['content']
-    return None
+    try:
+        conn = sqlite3.connect(DATABASE_NAME)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT content FROM Documents WHERE content LIKE ? LIMIT 10", (f"%{query}%",))
+        rows = cur.fetchall()
+        conn.close()
+        if not rows:
+            return None
+        combined = "\n\n".join([r['content'] for r in rows])
+        # trim to max_chars
+        if len(combined) > max_chars:
+            combined = combined[:max_chars]
+        return combined
+    except Exception as e:
+        print("Error searching documents:", e)
+        return None
