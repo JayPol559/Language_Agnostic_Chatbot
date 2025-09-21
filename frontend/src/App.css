@@ -1,56 +1,17 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import '../App.css';
-
-const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || 'https://language-agnostic-chatbot-1.onrender.com';
-
-const Admin = () => {
-  const [file, setFile] = useState(null);
-  const [message, setMessage] = useState('');
-
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-    setMessage('');
-  };
-
-  const handleUpload = async () => {
-    if (!file) {
-      setMessage('Please select a file first.');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await axios.post(`${API_URL}/admin/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      setMessage(response.data.message || 'Upload completed.');
-      setFile(null);
-    } catch (error) {
-      console.error('File upload failed:', error);
-      setMessage('File upload failed. Please try again.');
-    }
-  };
-
-  return (
-    <div className="admin-container">
-      <div className="admin-header">
-        <h1>Admin Panel</h1>
-        <p>Upload a PDF document to add to the knowledge base.</p>
-      </div>
-      <div className="admin-content">
-        <input type="file" onChange={handleFileChange} accept=".pdf" />
-        <button onClick={handleUpload} disabled={!file} className="upload-btn">
-          Upload
-        </button>
-        {message && <p className="status-message">{message}</p>}
-      </div>
-    </div>
-  );
-};
-
-export default Admin;
+/* Simplified styles for chat and admin */
+body { font-family: Arial, sans-serif; background:#eef2f7; margin:0; padding:0; }
+.app-container { max-width:900px; margin:30px auto; padding:20px; }
+.nav-bar { display:flex; gap:16px; margin-bottom:20px; }
+.nav-link { text-decoration:none; color:#007bff; font-weight:600; }
+.chat-container { background:white; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.06); padding:18px; }
+.chat-header { font-weight:700; color:#007bff; margin-bottom:10px; }
+.chat-messages { max-height:400px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.msg { padding:10px 14px; border-radius:10px; max-width:80%; }
+.msg.user { background:#007bff; color:white; margin-left:auto; border-bottom-right-radius:5px; }
+.msg.bot { background:#f1f3f4; color:#333; margin-right:auto; border-bottom-left-radius:5px; }
+.chat-input { display:flex; gap:8px; align-items:center; }
+.chat-input input { flex:1; padding:10px 12px; border-radius:20px; border:1px solid #ddd; }
+.chat-send-btn { padding:10px 16px; border-radius:20px; background:#007bff; color:white; border:none; cursor:pointer; }
+.admin-container { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; max-width:600px; background-color:#fff; border-radius:12px; box-shadow:0 8px 16px rgba(0,0,0,0.08); padding:30px; }
+.upload-btn { background-color:#28a745; color:white; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; }
+.status-message { margin-top:10px; color:#333; font-weight:600; }
