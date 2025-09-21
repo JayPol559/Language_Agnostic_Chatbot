@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import './App.css';
+import '../App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || ''; // fallback
+const API_URL = process.env.REACT_APP_API_URL || window.__API_URL__ || 'https://language-agnostic-chatbot-1.onrender.com'; // default to your render URL
 
 const Chatbot = () => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([
+    { sender: 'bot', text: "Hello! I'm here to help you with university circulars, notices, and information. What would you like to know?" }
+  ]);
   const [input, setInput] = useState('');
 
   const handleSend = async () => {
@@ -17,7 +19,7 @@ const Chatbot = () => {
 
     try {
       const response = await axios.post(`${API_URL}/ask_bot`, { query: input });
-      const botMessage = { sender: 'bot', text: response.data.response };
+      const botMessage = { sender: 'bot', text: response.data.response || 'No response from server.' };
       setMessages((prevMessages) => [...prevMessages, botMessage]);
     } catch (error) {
       console.error('Error fetching bot response:', error);
