@@ -1,24 +1,59 @@
-import google.generativeai as genai
 import os
+import requests
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Use GOOGLE Generative Language REST endpoint (text-bison-like).
+# The API key you provided will be used here. Please DO NOT commit this file with a real API key to a public repo.
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or "AIzaSyDimyRfkF7a8Nj84IE8D4PVrZgFVH7WHp4"
 
-model = genai.GenerativeModel('gemini-pro')
+# Example model endpoint (text-bison). Ensure this endpoint matches current Google Generative API.
+BASE_URL = "https://generativelanguage.googleapis.com/v1"
+
+# Model name: adjust if required by the API. This is an example; if your account uses another model name, change it.
+MODEL = "models/text-bison-001"
+
+
+def call_generative_api(prompt, max_output_tokens=512, temperature=0.2):
+    """
+    Calls Google Generative Language API using the provided API key and returns the generated text.
+    """
+    url = f"{BASE_URL}/{MODEL}:generate?key={GEMINI_API_KEY}"
+    payload = {
+        "prompt": {
+            "text": prompt
+        },
+        "temperature": temperature,
+        "maxOutputTokens": max_output_tokens
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        # Typical response contains 'candidates' list with 'output' or 'content'
+        if 'candidates' in data and len(data['candidates']) > 0:
+            return data['candidates'][0].get('output') or data['candidates'][0].get('content') or str(data['candidates'][0])
+        # Fallback to possible alternative keys
+        if 'output' in data:
+            return data['output']
+        return str(data)
+    except Exception as e:
+        # Log and return fallback
+        print("Generative API call failed:", e, getattr(e, 'response', None))
+        return "I'm sorry — I couldn't fetch an answer right now."
+
 
 def get_gemini_response(prompt):
     """
-    Sends a prompt to the Gemini API and returns the generated text.
+    Get a conversational/QA response for the given prompt.
     """
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        print(f"Gemini API Error: {e}")
-        return "I'm sorry, I'm unable to connect to the AI service right now."
+    return call_generative_api(prompt, max_output_tokens=400)
+
 
 def translate_text(text, target_language):
     """
-    Translates text to the target language using Gemini.
+    Translate `text` to `target_language`. Uses the generative model to translate if a dedicated translation API is not available.
+    Example: prompt for translation.
     """
-    prompt = f"Translate the following text to {target_language}: '{text}'"
-    return get_gemini_response(prompt)
+    if not text:
+        return text
+    prompt = f"Translate the following text to {target_language}:\n\n{text}"
+    return call_generative_api(prompt, max_output_tokens=400)
