@@ -1,20 +1,19 @@
-```html
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Language Agnostic Chatbot</title>
-    <!-- Runtime injection of API URL so GitHub Pages can use the Render backend without rebuilding -->
+
+    <!-- Runtime injection for API URL (useful for GitHub Pages without rebuild) -->
     <script>
-      // If you deploy to GitHub Pages and cannot set REACT_APP_API_URL at build time,
-      // this runtime injection ensures the front-end can still call your render backend.
-      // We default to your Render URL if window.__API_URL__ not set elsewhere.
+      // If REACT_APP_API_URL not baked-in at build time, this will set runtime API URL.
+      // You can override window.__API_URL__ before the bundle if needed.
       window.__API_URL__ = window.__API_URL__ || "https://language-agnostic-chatbot-1.onrender.com";
     </script>
   </head>
   <body>
     <div id="root"></div>
-    <!-- The React bundle will be injected here by the build -->
+    <!-- React bundle will be injected by build -->
   </body>
 </html>
