@@ -6,7 +6,7 @@ import os
 from database import init_db, DATABASE_NAME
 
 # Update this URL if you want to scrape a real college site
-COLLEGE_WEBSITE_URL = "https://www.example-college.edu/admissions"
+COLLEGE_WEBSITE_URL = "https://www.uniraj.ac.in/"
 
 
 def get_pdf_links(url):

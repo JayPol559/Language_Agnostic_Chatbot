@@ -9,7 +9,8 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_
 BASE_URL = "https://generativelanguage.googleapis.com/v1"
 
 # Model name: adjust if required by the API. This is an example; if your account uses another model name, change it.
-MODEL = "models/text-bison-001"
+# New line:
+MODEL = "models/gemini-pro"
 
 
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.2):
