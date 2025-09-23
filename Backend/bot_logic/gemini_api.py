@@ -3,7 +3,7 @@ import requests
 
 # Use GOOGLE Generative Language REST endpoint (text-bison-like).
 # The API key you provided will be used here. Please DO NOT commit this file with a real API key to a public repo.
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or "AIzaSyDimyRfkF7a8Nj84IE8D4PVrZgFVH7WHp4"
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or "AIzaSyBmc1MD1m4bQqXwWUyNRQCNIucaTqLi2hoQ"
 
 # Example model endpoint (text-bison). Ensure this endpoint matches current Google Generative API.
 BASE_URL = "https://generativelanguage.googleapis.com/v1"
