@@ -1,29 +1,29 @@
 import os
 import requests
 
-# Read API key and model from env
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+# 🔑 API key read from environment (safe way, no hardcoding)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
-# Default model: use Gemini model (not text-bison-001 anymore)
+# ✅ Latest Gemini models (change if you have access to others)
 # Options: "models/gemini-1.5-flash", "models/gemini-1.5-pro"
-GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL") or "models/gemini-1.5-flash"
 
-# Base URL for Google Generative Language REST API (⚠️ note v1beta)
+# ✅ Correct base URL (⚠️ Gemini API works on v1beta)
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
 
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
     """
-    Calls the Google Generative Language REST API using Gemini model.
-    Endpoint format:
-      POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}
+    Calls Google Gemini API using the correct REST format.
+    POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}
     """
     if not GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
+        raise RuntimeError("❌ GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
 
     url = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
     params = {"key": GEMINI_API_KEY}
 
-    # Gemini expects "contents" instead of "prompt"
+    # ✅ Gemini expects "contents" → "parts" → {"text": ...}
     payload = {
         "contents": [
             {
@@ -39,37 +39,46 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
     }
 
     headers = {"Content-Type": "application/json"}
+
     try:
         resp = requests.post(url, params=params, json=payload, headers=headers, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
 
-        # Gemini response shape:
-        # {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
-        if isinstance(data, dict) and "candidates" in data and len(data["candidates"]) > 0:
-            cand0 = data["candidates"][0]
-            if "content" in cand0 and "parts" in cand0["content"]:
-                parts = cand0["content"]["parts"]
-                if len(parts) > 0 and "text" in parts[0]:
+        # ✅ Parse Gemini response
+        # Expected: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
+        if "candidates" in data and data["candidates"]:
+            cand = data["candidates"][0]
+            if "content" in cand and "parts" in cand["content"]:
+                parts = cand["content"]["parts"]
+                if parts and "text" in parts[0]:
                     return parts[0]["text"]
 
-        # fallback: stringify whole response
+        # fallback
         return str(data)
 
     except requests.exceptions.HTTPError as http_err:
-        print(f"Generative API HTTP error: {http_err} - response text: {getattr(http_err.response, 'text', '')}")
-        return "I'm sorry — the language model could not generate an answer right now (HTTP error)."
+        print(f"⚠️ HTTP error: {http_err} | Response: {http_err.response.text if http_err.response else ''}")
+        return "I'm sorry — the model could not generate an answer right now."
     except Exception as e:
-        print("Generative API call failed:", e)
-        return "I'm sorry — I couldn't contact the language model right now."
+        print("⚠️ API call failed:", e)
+        return "I'm sorry — I couldn't contact the model right now."
 
 
 def get_gemini_response(prompt):
+    """Simple helper for direct prompts"""
     return call_generative_api(prompt, max_output_tokens=400)
 
 
 def translate_text(text, target_language):
+    """Translate text using Gemini"""
     if not text:
         return text
     t_prompt = f"Translate the following text to {target_language}:\n\n{text}"
-    return call_generative_api(t_prompt, max_output_tokens=400)
+    return call_generative_api(t_prompt, max_output_tokens=200)
+
+
+# 🟢 Example test
+if __name__ == "__main__":
+    ans = get_gemini_response("Write a short welcome message for a university chatbot.")
+    print("Gemini Response:", ans)
