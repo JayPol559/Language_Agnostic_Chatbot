@@ -8,14 +8,14 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_
 # Options: "models/gemini-1.5-flash", "models/gemini-1.5-pro"
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
 
-# Base URL for Google Generative Language REST API
-BASE_URL = "https://generativelanguage.googleapis.com/v1"
+# Base URL for Google Generative Language REST API (⚠️ note v1beta)
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
     """
     Calls the Google Generative Language REST API using Gemini model.
     Endpoint format:
-      POST https://generativelanguage.googleapis.com/v1/models/{MODEL}:generateContent?key={API_KEY}
+      POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}
     """
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
