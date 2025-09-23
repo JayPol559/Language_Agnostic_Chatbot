@@ -1,72 +1,64 @@
 import requests
 from bs4 import BeautifulSoup
-import PyPDF2
-import sqlite3
 import os
-from database import init_db, DATABASE_NAME
+from urllib.parse import urljoin
+from database import init_db, insert_document
 
-# Update this URL if you want to scrape a real college site
-COLLEGE_WEBSITE_URL = "https://www.uniraj.ac.in/"
+COLLEGE_WEBSITE_URL = "https://www.example-college.edu/admissions"
 
 
 def get_pdf_links(url):
-    print(f"Scraping for PDFs on {url}...")
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
     except Exception as e:
         print("Failed to retrieve page:", e)
         return []
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(resp.text, 'html.parser')
     pdf_links = set()
-    for a_tag in soup.find_all('a', href=True):
-        link = a_tag['href']
-        if link.lower().endswith('.pdf'):
-            if not link.startswith('http'):
-                link = requests.compat.urljoin(url, link)
-            pdf_links.add(link)
+    for a in soup.find_all('a', href=True):
+        href = a['href']
+        if href.lower().endswith('.pdf'):
+            full = urljoin(url, href)
+            pdf_links.add(full)
     return list(pdf_links)
 
 
-def download_and_read_pdf(url):
+def download_pdf(url, target_folder='downloads'):
+    os.makedirs(target_folder, exist_ok=True)
+    local_name = os.path.join(target_folder, os.path.basename(url.split('?')[0]))
     try:
-        response = requests.get(url, stream=True, timeout=20)
-        response.raise_for_status()
-        reader = PyPDF2.PdfReader(response.raw)
-        text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-        return text
+        r = requests.get(url, stream=True, timeout=30)
+        r.raise_for_status()
+        with open(local_name, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        return local_name
     except Exception as e:
-        print(f"Error processing PDF from {url}: {e}")
+        print("Failed to download PDF:", e)
         return None
 
 
 def ingest_data():
     init_db()
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-
     pdf_links = get_pdf_links(COLLEGE_WEBSITE_URL)
-
-    for url in pdf_links:
-        print(f"Processing {url}...")
-        text_content = download_and_read_pdf(url)
-
-        if text_content:
-            title = os.path.basename(url)
-            cursor.execute(
-                "INSERT OR IGNORE INTO Documents (title, url, content, status) VALUES (?, ?, ?, ?)",
-                (title, url, text_content, 'scraped')
-            )
-            print(f"Successfully added {title} to database.")
-
-    conn.commit()
-    conn.close()
-    print("Data ingestion complete!")
+    for link in pdf_links:
+        print("Processing:", link)
+        local = download_pdf(link)
+        if local:
+            # Use the same process_and_save_pdf flow
+            from bot_logic.data_processor import process_and_save_pdf
+            success = process_and_save_pdf(local, os.path.basename(local))
+            if success:
+                print("Saved:", local)
+            else:
+                print("Failed processing:", local)
+            try:
+                os.remove(local)
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':
