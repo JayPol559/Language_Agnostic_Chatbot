@@ -2,7 +2,7 @@ import os
 from database import insert_document
 import PyPDF2
 
-# Optional OCR dependencies
+# OCR optional
 try:
     import pytesseract
     from pdf2image import convert_from_path
@@ -12,6 +12,7 @@ except Exception:
     OCR_AVAILABLE = False
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# default storage path (can be overridden via STORAGE_FOLDER env var)
 STORAGE_FOLDER = os.environ.get('STORAGE_FOLDER') or os.path.join(BASE_DIR, 'storage', 'uploads')
 os.makedirs(STORAGE_FOLDER, exist_ok=True)
 
@@ -34,10 +35,6 @@ def extract_text_from_pdf(file_path):
 
 
 def ocr_pdf(file_path):
-    """
-    Convert PDF pages to images (pdf2image) and OCR them (pytesseract).
-    Requires poppler (pdf2image) and tesseract installed on the system.
-    """
     if not OCR_AVAILABLE:
         return ""
     try:
@@ -45,7 +42,6 @@ def ocr_pdf(file_path):
     except Exception as e:
         print("pdf2image convert_from_path failed:", e)
         return ""
-
     text = ""
     for img in images:
         try:
@@ -56,33 +52,33 @@ def ocr_pdf(file_path):
     return text
 
 
-def process_and_save_pdf(file_path, filename):
+def process_and_save_pdf(file_path, saved_filename):
     """
-    Extract text (PyPDF2), fallback to OCR if needed, and insert into DB.
-    file_path: absolute path where file is stored (we keep it)
-    filename: stored filename (basename)
-    Returns True on success.
+    file_path: absolute path to saved file
+    saved_filename: basename stored (recorded in DB)
+    Returns True if processed & inserted into DB (content available), False otherwise.
     """
     try:
         text = extract_text_from_pdf(file_path)
         if not text or not text.strip():
             if OCR_AVAILABLE:
-                print("No text found with PyPDF2; trying OCR.")
+                print("No text found via PyPDF2; trying OCR...")
                 text = ocr_pdf(file_path)
             else:
                 print("No text found and OCR not available.")
         if not text or not text.strip():
-            print("No extractable text found in PDF:", filename)
+            print("No extractable text found in PDF:", saved_filename)
+            # still keep file stored, but mark as unprocessed
+            insert_document(title=saved_filename, filename=saved_filename, content="", status="no_text")
             return False
 
-        # limit to a reasonable size
+        # trim big content
         max_len = 300000
         if len(text) > max_len:
             text = text[:max_len]
 
-        # Save into DB: filename stored relative (basename)
-        insert_document(title=filename, filename=filename, content=text, status='uploaded')
-        print(f"Saved PDF content for {filename}.")
+        insert_document(title=saved_filename, filename=saved_filename, content=text, status='uploaded')
+        print(f"Saved PDF content for {saved_filename}.")
         return True
     except Exception as e:
         print("Failed to process PDF:", e)
@@ -90,9 +86,6 @@ def process_and_save_pdf(file_path, filename):
 
 
 def get_document_content_for_query(query, max_chars=2500):
-    """
-    Returns combined excerpt and first document metadata if any matches.
-    """
     try:
         from database import search_documents
         snippets = search_documents(query, max_chars=max_chars, limit=3)
