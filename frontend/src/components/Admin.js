@@ -35,7 +35,7 @@ const Admin = () => {
       return;
     }
     const formData = new FormData();
-    files.forEach((f) => formData.append('file', f));
+    files.forEach((f) => formData.append('file', f)); // append multiple files with same field name
     setMessage('Uploading...');
     try {
       const res = await axios.post(`${API_URL}/admin/upload`, formData, {
@@ -68,14 +68,12 @@ const Admin = () => {
         <h1>Admin Panel</h1>
         <p>Upload one or more PDF documents to add to the knowledge base. Uploaded files are stored until you delete them.</p>
       </div>
-
       <div className="admin-content">
         <input type="file" multiple accept=".pdf" onChange={handleFileChange} />
         <button onClick={handleUpload} disabled={!files.length} className="upload-btn">
           Upload
         </button>
         {message && <p className="status-message">{message}</p>}
-
         {uploadResults.length > 0 && (
           <div>
             <h3>Upload Results</h3>
