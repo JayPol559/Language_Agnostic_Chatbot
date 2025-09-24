@@ -4,13 +4,13 @@ import requests
 # Read API key and model from env
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
 
-# Default Gemini model (latest stable: gemini-1.5-flash / gemini-1.5-pro)
+# Default Gemini model (latest stable options: gemini-1.5-flash / gemini-1.5-pro)
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
 
 # Base URL (⚠️ must use v1beta for Gemini models)
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-# Language codes
+# Language codes mapping
 LANG_CODE_TO_NAME = {
     'en': 'English',
     'hi': 'Hindi',
@@ -24,9 +24,9 @@ LANG_CODE_TO_NAME = {
 }
 
 
-def call_generative_api(prompt, max_output_tokens=140, temperature=0.1, timeout=30):
+def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
     """
-    Call the Gemini API with correct payload format.
+    Call Gemini API with the correct format.
     Endpoint:
       POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}
     """
@@ -36,10 +36,13 @@ def call_generative_api(prompt, max_output_tokens=140, temperature=0.1, timeout=
     url = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
     params = {"key": GEMINI_API_KEY}
 
-    # Correct Gemini request format
     payload = {
         "contents": [
-            {"parts": [{"text": prompt}]}
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
         ],
         "generationConfig": {
             "temperature": temperature,
@@ -62,7 +65,6 @@ def call_generative_api(prompt, max_output_tokens=140, temperature=0.1, timeout=
                 if len(parts) > 0 and "text" in parts[0]:
                     return parts[0]["text"]
 
-        # fallback: return raw json
         return str(data)
 
     except requests.exceptions.HTTPError as http_err:
@@ -73,9 +75,10 @@ def call_generative_api(prompt, max_output_tokens=140, temperature=0.1, timeout=
         return "I'm sorry — I couldn't contact the language model right now."
 
 
-# === Wrappers (names same as original) ===
-
 def get_gemini_response_from_source(question, source_text, source_title=None, language_code='en'):
+    """
+    Ask model to answer concisely using source_text only.
+    """
     lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
         f"You are an assistant. Use ONLY the following source excerpt to answer the question. "
@@ -87,21 +90,30 @@ def get_gemini_response_from_source(question, source_text, source_title=None, la
         f"Answer in {lang_name}. Be concise — ONE short sentence. "
         f"At the end include the source title in parentheses."
     )
-    return call_generative_api(prompt, max_output_tokens=140, temperature=0.05)
+    return call_generative_api(prompt, max_output_tokens=400, temperature=0.05)
 
 
 def get_gemini_response_general(question, language_code='en'):
+    """
+    General fallback when no source excerpt is available.
+    """
     lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
-        f"You are an assistant for university/college info. Answer concisely (ONE short sentence) in {lang_name}. "
-        f"Question: {question}\nIf you cannot confidently answer, say: "
+        f"You are an assistant for university/college info. "
+        f"Answer concisely (ONE short sentence) in {lang_name}. "
+        f"Question: {question}\n"
+        f"If you cannot confidently answer, say: "
         f"'I don't see that information in the provided documents.'"
     )
-    return call_generative_api(prompt, max_output_tokens=110, temperature=0.05)
+    return call_generative_api(prompt, max_output_tokens=300, temperature=0.05)
 
 
-def translate_text(text, target_language):
+def translate_text(text, target_language_code):
+    """
+    Translate text into target language.
+    """
     if not text:
         return text
-    t_prompt = f"Translate the following text to {target_language}:\n\n{text}"
-    return call_generative_api(t_prompt, max_output_tokens=300)
+    lang_name = LANG_CODE_TO_NAME.get(target_language_code, target_language_code)
+    prompt = f"Translate the following text into {lang_name} and keep it short:\n\n{text}"
+    return call_generative_api(prompt, max_output_tokens=300, temperature=0.1)
