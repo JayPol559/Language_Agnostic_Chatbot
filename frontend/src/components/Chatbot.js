@@ -8,7 +8,6 @@ const LANG_OPTIONS = [
   { code: 'en', label: 'English' },
   { code: 'hi', label: 'Hindi' },
   { code: 'gu', label: 'Gujarati' },
-  // add more as needed
 ];
 
 const Chatbot = () => {
