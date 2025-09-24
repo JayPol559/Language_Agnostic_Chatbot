@@ -25,7 +25,7 @@ def init_db():
     try:
         cur.execute('CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(content, docid UNINDEXED)')
     except Exception:
-        # Some SQLite builds may not support FTS5; we will fallback to LIKE search.
+        # Some SQLite builds may not include FTS5; fallback handled in search.
         pass
 
     # FAQs table
@@ -37,7 +37,7 @@ def init_db():
     )
     ''')
 
-    # Conversations log with source doc id
+    # Conversations log
     cur.execute('''
     CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,9 +53,6 @@ def init_db():
 
 
 def insert_document(title, filename, content, status='uploaded'):
-    """
-    filename is the stored filename inside storage/uploads (relative).
-    """
     conn = sqlite3.connect(DATABASE_NAME)
     cur = conn.cursor()
     cur.execute(
@@ -63,6 +60,7 @@ def insert_document(title, filename, content, status='uploaded'):
         (title, filename, content, status)
     )
     doc_id = cur.lastrowid
+    # insert into FTS table if exists
     try:
         cur.execute("INSERT INTO documents_fts(rowid, content, docid) VALUES (?, ?, ?)", (doc_id, content, doc_id))
     except Exception:
@@ -74,22 +72,20 @@ def insert_document(title, filename, content, status='uploaded'):
 
 def search_documents(query, max_chars=2500, limit=5):
     """
-    Search documents and return list of matches with id, title, filename, excerpt.
+    Returns list of matches: [{'id','title','filename','excerpt'}, ...]
     """
     conn = sqlite3.connect(DATABASE_NAME)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-
     results = []
 
-    # Try FTS search
+    # Try FTS search first
     try:
         cur.execute("SELECT docid, content FROM documents_fts WHERE documents_fts MATCH ? LIMIT ?", (query, limit))
         rows = cur.fetchall()
         for r in rows:
             docid = r['docid']
             content = r['content'] or ''
-            # get metadata
             cur2 = conn.cursor()
             cur2.execute("SELECT title, filename FROM Documents WHERE id = ?", (docid,))
             meta = cur2.fetchone()
@@ -98,7 +94,7 @@ def search_documents(query, max_chars=2500, limit=5):
             excerpt = content[:max_chars]
             results.append({'id': docid, 'title': title, 'filename': filename, 'excerpt': excerpt})
     except Exception:
-        # fallback LIKE
+        # Fallback to LIKE search
         cur.execute("SELECT id, title, filename, content FROM Documents WHERE content LIKE ? LIMIT ?", (f"%{query}%", limit))
         rows = cur.fetchall()
         for r in rows:
@@ -130,13 +126,9 @@ def get_document_by_id(doc_id):
 
 
 def delete_document(doc_id):
-    """
-    Remove DB row for doc_id. Caller should delete the stored file too.
-    """
     conn = sqlite3.connect(DATABASE_NAME)
     cur = conn.cursor()
     cur.execute("DELETE FROM Documents WHERE id = ?", (doc_id,))
-    # Also remove from FTS if present
     try:
         cur.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
     except Exception:
