@@ -35,7 +35,7 @@ const Admin = () => {
       return;
     }
     const formData = new FormData();
-    files.forEach((f) => formData.append('file', f)); // append multiple files with same field name
+    files.forEach((f) => formData.append('file', f));
     setMessage('Uploading...');
     try {
       const res = await axios.post(`${API_URL}/admin/upload`, formData, {
@@ -51,18 +51,31 @@ const Admin = () => {
     }
   };
 
+  const handleDelete = async (docId) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await axios.post(`${API_URL}/admin/delete/${docId}`);
+      fetchDocs();
+    } catch (err) {
+      console.error('Delete failed', err);
+      alert('Delete failed. Check server logs.');
+    }
+  };
+
   return (
     <div className="admin-container">
       <div className="admin-header">
         <h1>Admin Panel</h1>
-        <p>Upload one or more PDF documents to add to the knowledge base.</p>
+        <p>Upload one or more PDF documents to add to the knowledge base. Uploaded files are stored until you delete them.</p>
       </div>
+
       <div className="admin-content">
         <input type="file" multiple accept=".pdf" onChange={handleFileChange} />
         <button onClick={handleUpload} disabled={!files.length} className="upload-btn">
           Upload
         </button>
         {message && <p className="status-message">{message}</p>}
+
         {uploadResults.length > 0 && (
           <div>
             <h3>Upload Results</h3>
@@ -83,7 +96,11 @@ const Admin = () => {
         <ul>
           {docs.map((d) => (
             <li key={d.id}>
-              {d.title} — {d.status} — {new Date(d.created_at).toLocaleString()}
+              {d.title} — {d.status} — {new Date(d.created_at).toLocaleString()} &nbsp;
+              {d.download_url && (
+                <a href={d.download_url} target="_blank" rel="noreferrer">Download</a>
+              )}
+              &nbsp; <button onClick={() => handleDelete(d.id)}>Delete</button>
             </li>
           ))}
         </ul>
