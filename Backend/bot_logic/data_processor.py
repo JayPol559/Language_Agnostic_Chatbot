@@ -2,7 +2,7 @@ import os
 from database import insert_document
 import PyPDF2
 
-# OCR optional
+# Optional OCR
 try:
     import pytesseract
     from pdf2image import convert_from_path
@@ -12,7 +12,6 @@ except Exception:
     OCR_AVAILABLE = False
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# default storage path (can be overridden via STORAGE_FOLDER env var)
 STORAGE_FOLDER = os.environ.get('STORAGE_FOLDER') or os.path.join(BASE_DIR, 'storage', 'uploads')
 os.makedirs(STORAGE_FOLDER, exist_ok=True)
 
@@ -54,25 +53,23 @@ def ocr_pdf(file_path):
 
 def process_and_save_pdf(file_path, saved_filename):
     """
-    file_path: absolute path to saved file
-    saved_filename: basename stored (recorded in DB)
-    Returns True if processed & inserted into DB (content available), False otherwise.
+    Extract text, fallback to OCR if needed, then insert into DB.
+    We keep the saved file on disk (so it persists until manual deletion).
     """
     try:
         text = extract_text_from_pdf(file_path)
         if not text or not text.strip():
             if OCR_AVAILABLE:
-                print("No text found via PyPDF2; trying OCR...")
+                print("No text via PyPDF2 — trying OCR...")
                 text = ocr_pdf(file_path)
             else:
-                print("No text found and OCR not available.")
+                print("No text and OCR not available.")
         if not text or not text.strip():
-            print("No extractable text found in PDF:", saved_filename)
-            # still keep file stored, but mark as unprocessed
+            # Insert record with empty content but keep status to indicate no-text
             insert_document(title=saved_filename, filename=saved_filename, content="", status="no_text")
+            print("Inserted document record but no text extractable:", saved_filename)
             return False
 
-        # trim big content
         max_len = 300000
         if len(text) > max_len:
             text = text[:max_len]
