@@ -1,14 +1,28 @@
 import os
 import requests
 
-# Read API key and model from env
+# Read API key and model from environment variables
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
 
 # Default Gemini model (latest stable options: gemini-1.5-flash / gemini-1.5-pro)
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
 
-# Base URL (⚠️ must use v1beta for Gemini models)
+# Base URL for Gemini (use v1beta for Gemini models)
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+# Map common language codes to display names the model understands better
+LANG_CODE_TO_NAME = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'gu': 'Gujarati',
+    'mr': 'Marathi',
+    'bn': 'Bengali',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'kn': 'Kannada',
+    'ml': 'Malayalam',
+    # add more as needed
+}
 
 
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
@@ -53,7 +67,7 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
                 if len(parts) > 0 and "text" in parts[0]:
                     return parts[0]["text"]
 
-        # fallback: return full json
+        # Fallback: return full JSON
         return str(data)
 
     except requests.exceptions.HTTPError as http_err:
