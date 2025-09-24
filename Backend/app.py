@@ -10,19 +10,22 @@ ENV_PATH = os.path.join(BASE_DIR, '.env')
 if os.path.exists(ENV_PATH):
     load_dotenv(ENV_PATH)
 
-from bot_logic.gemini_api import get_gemini_response_from_source, get_gemini_response_general
+from bot_logic.gemini_api import get_gemini_response_from_source, get_gemini_response_general, translate_text
 from bot_logic.data_processor import process_and_save_pdf, get_document_content_for_query, STORAGE_FOLDER
 from database import init_db, list_documents, get_document_by_id, delete_document
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
-# Use STORAGE_FOLDER env var to allow persistent mount on Render or other hosts
+# Storage folder (can be a persistent mount)
 STORAGE_FOLDER = os.environ.get('STORAGE_FOLDER') or STORAGE_FOLDER
 os.makedirs(STORAGE_FOLDER, exist_ok=True)
 UPLOAD_FOLDER = STORAGE_FOLDER
 ALLOWED_EXTENSIONS = {'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Ensure DB initialized at startup
+init_db()
 
 
 def allowed_file(filename):
@@ -54,7 +57,7 @@ def ask_bot():
 
     source_info = None
     try:
-        # 1) Check FAQs
+        # check FAQs quickly
         conn = sqlite3.connect(os.path.join(BASE_DIR, 'knowledge_base.db'))
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -64,9 +67,9 @@ def ask_bot():
 
         if faq_row:
             response_text = faq_row['answer']
-            # optional translation step here if needed
+            if language and language != 'en':
+                response_text = translate_text(response_text, language)
         else:
-            # 2) Search uploaded docs
             doc_search = get_document_content_for_query(user_query)
             if doc_search:
                 combined = doc_search['combined']
@@ -74,7 +77,6 @@ def ask_bot():
                 source_info = {'id': first_doc.get('id'), 'title': first_doc.get('title'), 'filename': first_doc.get('filename')}
                 response_text = get_gemini_response_from_source(user_query, combined, source_title=source_info['title'], language_code=language)
             else:
-                # fallback
                 response_text = get_gemini_response_general(user_query, language_code=language)
     except Exception as ex:
         app.logger.error("Error while generating response: %s", ex)
@@ -98,7 +100,7 @@ def ask_bot():
 def upload_file():
     """
     Accept multiple files (multipart/form-data). Field name must be 'file' (multiple).
-    Saves files permanently under STORAGE_FOLDER (unless you delete).
+    Returns per-file result with error message if any.
     """
     files = request.files.getlist('file')
     if not files:
@@ -113,17 +115,16 @@ def upload_file():
             saved_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
             try:
                 file.save(saved_path)
+            except Exception as e:
+                results.append({'filename': filename, 'processed': False, 'error': f'File save failed: {e}'})
+                continue
+
+            try:
                 success = process_and_save_pdf(saved_path, unique_name)
-                # KEEP saved file so it's available until manual deletion
                 results.append({'filename': unique_name, 'processed': bool(success)})
             except Exception as ex:
-                app.logger.error("Upload failed: %s", ex)
-                try:
-                    if os.path.exists(saved_path):
-                        os.remove(saved_path)
-                except Exception:
-                    pass
-                results.append({'filename': filename, 'processed': False, 'error': str(ex)})
+                app.logger.error("Processing failed for %s: %s", unique_name, ex)
+                results.append({'filename': unique_name, 'processed': False, 'error': str(ex)})
         else:
             results.append({'filename': getattr(file, 'filename', 'unknown'), 'processed': False, 'error': 'Invalid file format'})
 
@@ -172,6 +173,7 @@ def home():
     return "Backend is running."
 
 if __name__ == '__main__':
+    # init_db already called above but ensure again
     init_db()
     port = int(os.environ.get('PORT', 5000))
     debug_flag = os.environ.get('FLASK_DEBUG', '0') == '1'
