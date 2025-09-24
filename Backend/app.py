@@ -10,14 +10,14 @@ ENV_PATH = os.path.join(BASE_DIR, '.env')
 if os.path.exists(ENV_PATH):
     load_dotenv(ENV_PATH)
 
-from bot_logic.gemini_api import get_gemini_response_from_source, get_gemini_response_general, translate_text
+from bot_logic.gemini_api import get_gemini_response_from_source, get_gemini_response_general
 from bot_logic.data_processor import process_and_save_pdf, get_document_content_for_query, STORAGE_FOLDER
 from database import init_db, list_documents, get_document_by_id, delete_document
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
-# Storage folder: use env STORAGE_FOLDER to allow persistent mount (e.g., Render persistent disk).
+# Use STORAGE_FOLDER env var to allow persistent mount on Render or other hosts
 STORAGE_FOLDER = os.environ.get('STORAGE_FOLDER') or STORAGE_FOLDER
 os.makedirs(STORAGE_FOLDER, exist_ok=True)
 UPLOAD_FOLDER = STORAGE_FOLDER
@@ -64,8 +64,7 @@ def ask_bot():
 
         if faq_row:
             response_text = faq_row['answer']
-            if language and language != 'en':
-                response_text = translate_text(response_text, language)
+            # optional translation step here if needed
         else:
             # 2) Search uploaded docs
             doc_search = get_document_content_for_query(user_query)
@@ -75,7 +74,7 @@ def ask_bot():
                 source_info = {'id': first_doc.get('id'), 'title': first_doc.get('title'), 'filename': first_doc.get('filename')}
                 response_text = get_gemini_response_from_source(user_query, combined, source_title=source_info['title'], language_code=language)
             else:
-                # 3) fallback
+                # fallback
                 response_text = get_gemini_response_general(user_query, language_code=language)
     except Exception as ex:
         app.logger.error("Error while generating response: %s", ex)
@@ -109,14 +108,13 @@ def upload_file():
     for file in files:
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            # To avoid collisions, you can prefix with timestamp or UUID
             import time, uuid
             unique_name = f"{int(time.time())}_{uuid.uuid4().hex}_{filename}"
             saved_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
             try:
                 file.save(saved_path)
                 success = process_and_save_pdf(saved_path, unique_name)
-                # IMPORTANT: we KEEP the saved file (do not delete) so it's available until manual deletion
+                # KEEP saved file so it's available until manual deletion
                 results.append({'filename': unique_name, 'processed': bool(success)})
             except Exception as ex:
                 app.logger.error("Upload failed: %s", ex)
@@ -135,7 +133,6 @@ def upload_file():
 @app.route('/admin/docs', methods=['GET'])
 def admin_docs():
     docs = list_documents(limit=1000)
-    # attach download URL for each doc
     docs_with_urls = []
     for d in docs:
         filename = d.get('filename')
@@ -154,9 +151,7 @@ def admin_delete(doc_id):
     if not doc:
         return jsonify({'message': 'Not found'}), 404
     filename = doc.get('filename')
-    # delete DB entry
     delete_document(doc_id)
-    # delete file from storage if exists
     if filename:
         fpath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         try:
@@ -169,9 +164,6 @@ def admin_delete(doc_id):
 
 @app.route('/uploads/<path:filename>', methods=['GET'])
 def uploaded_file(filename):
-    """
-    Serve uploaded file. Be careful: for production consider protected endpoints or signed URLs.
-    """
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
 
 
