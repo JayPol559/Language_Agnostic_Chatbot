@@ -1,16 +1,12 @@
 import os
 import requests
 
-# Read API key and model from environment variables
+# === Config ===
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
-
-# Default Gemini model (latest stable options: gemini-1.5-flash / gemini-1.5-pro)
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
-
-# Base URL for Gemini (use v1beta for Gemini models)
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-# Map common language codes to display names the model understands better
+# Supported languages
 LANG_CODE_TO_NAME = {
     'en': 'English',
     'hi': 'Hindi',
@@ -21,15 +17,12 @@ LANG_CODE_TO_NAME = {
     'te': 'Telugu',
     'kn': 'Kannada',
     'ml': 'Malayalam',
-    # add more as needed
 }
 
 
-def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
+def call_generative_api(prompt, max_output_tokens=180, temperature=0.1, timeout=30):
     """
-    Call the Gemini API with correct format.
-    Endpoint:
-      POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}
+    Core Gemini API caller (v1beta generateContent endpoint).
     """
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
@@ -37,13 +30,10 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
     url = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
     params = {"key": GEMINI_API_KEY}
 
-    # Gemini expects `contents` instead of `prompt`
     payload = {
         "contents": [
             {
-                "parts": [
-                    {"text": prompt}
-                ]
+                "parts": [{"text": prompt}]
             }
         ],
         "generationConfig": {
@@ -59,15 +49,15 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
         resp.raise_for_status()
         data = resp.json()
 
-        # Parse Gemini response
+        # === Parse Gemini response ===
         if isinstance(data, dict) and "candidates" in data and len(data["candidates"]) > 0:
             cand0 = data["candidates"][0]
             if "content" in cand0 and "parts" in cand0["content"]:
                 parts = cand0["content"]["parts"]
-                if len(parts) > 0 and "text" in parts[0]:
+                if parts and "text" in parts[0]:
                     return parts[0]["text"]
 
-        # Fallback: return full JSON
+        # fallback
         return str(data)
 
     except requests.exceptions.HTTPError as http_err:
@@ -78,40 +68,43 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
         return "I'm sorry — I couldn't contact the language model right now."
 
 
-# === Wrappers (names kept same as your old code) ===
-
-def get_gemini_response_from_source(question, source_text, language='en'):
+def get_gemini_response_from_source(question, source_text, source_title=None, language_code='en'):
     """
-    Ask model to answer concisely using source_text.
+    Answer concisely using ONLY the provided source_text.
     """
-    lang_instruction = f"Answer in {language}." if language else "Answer in the same language as the question."
+    lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
-        f"You are an assistant that answers concisely (1-2 short sentences). "
-        f"Use ONLY the information in the following source excerpt. "
-        f"Do not invent facts. If the answer cannot be found, say "
+        f"You are an assistant. Use ONLY the following source excerpt to answer the question. "
+        f"Do NOT invent facts. If the answer is not present, respond exactly: "
         f"'I don't see that information in the provided documents.'\n\n"
+        f"Source title: {source_title or 'Source'}\n\n"
         f"Source excerpt:\n{source_text}\n\n"
-        f"Question: {question}\n\n"
-        f"{lang_instruction}\nBe concise and specific."
+        f"Question: {question}\n"
+        f"Answer in {lang_name}. Be concise — ONE short sentence. "
+        f"At the end include the source title in parentheses."
     )
-    return call_generative_api(prompt, max_output_tokens=400)
+    return call_generative_api(prompt, max_output_tokens=140, temperature=0.05)
 
 
-def get_gemini_response_general(question, language='en'):
+def get_gemini_response_general(question, language_code='en'):
     """
-    General fallback when no document matches.
+    General fallback Q&A when no source docs are matched.
     """
-    lang_instruction = f"Answer in {language}." if language else ""
+    lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
-        f"You are an assistant answering questions about universities and college administrative info. "
-        f"Answer concisely (1-2 short sentences). {lang_instruction} "
-        f"Question: {question}\nBe concise and specific."
+        f"You are an assistant for university/college info. "
+        f"Answer concisely (ONE short sentence) in {lang_name}. "
+        f"Question: {question}\n"
+        f"If you cannot confidently answer, say: "
+        f"'I don't see that information in the provided documents.'"
     )
-    return call_generative_api(prompt, max_output_tokens=400)
+    return call_generative_api(prompt, max_output_tokens=110, temperature=0.05)
 
 
-def translate_text(text, target_language):
-    if not text:
-        return text
-    t_prompt = f"Translate the following text to {target_language}:\n\n{text}"
-    return call_generative_api(t_prompt, max_output_tokens=400)
+def translate_text(text, target_language_code):
+    """
+    Translate short text into target language.
+    """
+    lang_name = LANG_CODE_TO_NAME.get(target_language_code, target_language_code)
+    prompt = f"Translate the following text into {lang_name} and keep it short:\n\n{text}"
+    return call_generative_api(prompt, max_output_tokens=140, temperature=0.1)
