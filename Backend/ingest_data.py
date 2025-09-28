@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-from urllib.parse import urljoin
+from urllib.parse import urljoin 
 from database import init_db, insert_document
 
 COLLEGE_WEBSITE_URL = "https://www.example-college.edu/admissions"
