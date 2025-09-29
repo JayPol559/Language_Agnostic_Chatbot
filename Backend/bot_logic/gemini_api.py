@@ -105,3 +105,4 @@ def get_gemini_response_from_source(question, source_text, source_title=None, la
     prompt = (
         f"You are an assistant. Use ONLY the following source excerpt to answer the question. "
         f"Do NOT invent facts. If the answer is not present, respond exactly: "
+        )
