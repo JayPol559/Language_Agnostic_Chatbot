@@ -7,14 +7,18 @@ DATABASE_NAME = os.path.join(BASE_DIR, 'knowledge_base.db')
 
 
 def _connect():
+    # Use check_same_thread False if using threads; keep default for now
     return sqlite3.connect(DATABASE_NAME)
 
 
 def _table_columns(conn, table_name: str) -> List[str]:
     cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table_name})")
-    rows = cur.fetchall()
-    return [r[1] for r in rows] if rows else []
+    try:
+        cur.execute(f"PRAGMA table_info({table_name})")
+        rows = cur.fetchall()
+        return [r[1] for r in rows] if rows else []
+    except Exception:
+        return []
 
 
 def init_db():
@@ -66,7 +70,7 @@ def init_db():
         )
     ''')
 
-    # Conversations log
+    # Conversations log (ensure table exists and add missing columns if any)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +80,15 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # If an older DB had conversations without source_doc_id, add it now
+    conv_cols = _table_columns(conn, 'conversations')
+    if 'source_doc_id' not in conv_cols:
+        try:
+            cur.execute("ALTER TABLE conversations ADD COLUMN source_doc_id INTEGER")
+        except Exception:
+            # If ALTER TABLE fails for some reason, we keep going (DB may be in a state that needs manual migration)
+            pass
 
     conn.commit()
 
@@ -93,16 +106,9 @@ def init_db():
 def insert_document(title: str, filename: str, content: str, status: str = 'uploaded') -> int:
     conn = _connect()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO Documents (title, filename, content, status) VALUES (?, ?, ?, ?)",
-        (title, filename, content, status)
-    )
+    cur.execute("INSERT INTO Documents (title, filename, content, status) VALUES (?, ?, ?, ?)",
+                (title, filename, content, status))
     doc_id = cur.lastrowid
-    try:
-        cur.execute("INSERT INTO documents_fts(rowid, content, docid) VALUES (?, ?, ?)", (doc_id, content, doc_id))
-    except Exception:
-        # FTS not available or insertion failed; proceed
-        pass
     conn.commit()
     conn.close()
     return doc_id
@@ -115,30 +121,41 @@ def search_documents(query: str, max_chars: int = 2500, limit: int = 5) -> List[
     conn = _connect()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    results = []
-
-    # Try FTS search first
+    # Prefer FTS if available
     try:
-        cur.execute("SELECT docid, content FROM documents_fts WHERE documents_fts MATCH ? LIMIT ?", (query, limit))
-        rows = cur.fetchall()
-        for r in rows:
-            docid = r['docid']
-            content = r['content'] or ''
-            cur2 = conn.cursor()
-            cur2.execute("SELECT title, filename FROM Documents WHERE id = ?", (docid,))
-            meta = cur2.fetchone()
-            title = meta['title'] if meta else f"Document {docid}"
-            filename = meta['filename'] if meta else None
-            excerpt = content[:max_chars]
-            results.append({'id': docid, 'title': title, 'filename': filename, 'excerpt': excerpt})
+        # If documents_fts exists, use it
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='documents_fts'")
+        if cur.fetchone():
+            # very simple FTS query
+            cur.execute("""
+                SELECT d.id, d.title, d.filename, substr(d.content, instr(lower(d.content), lower(?)) - 80, ?) as excerpt
+                FROM Documents d
+                JOIN documents_fts f ON f.docid = d.id
+                WHERE documents_fts MATCH ?
+                LIMIT ?
+            """, (query, max_chars, query, limit))
+            rows = cur.fetchall()
+        else:
+            # fallback to LIKE
+            cur.execute("SELECT id, title, filename, content FROM Documents WHERE lower(content) LIKE ? LIMIT ?",
+                        (f"%{query.lower()}%", limit))
+            rows = cur.fetchall()
     except Exception:
-        # Fallback to LIKE search
-        cur.execute("SELECT id, title, filename, content FROM Documents WHERE content LIKE ? LIMIT ?", (f"%{query}%", limit))
+        # fallback: simple LIKE
+        cur.execute("SELECT id, title, filename, content FROM Documents WHERE lower(content) LIKE ? LIMIT ?",
+                    (f"%{query.lower()}%", limit))
         rows = cur.fetchall()
-        for r in rows:
-            excerpt = (r['content'] or '')[:max_chars]
-            results.append({'id': r['id'], 'title': r['title'], 'filename': r['filename'], 'excerpt': excerpt})
 
+    results = []
+    for r in rows:
+        excerpt = ''
+        try:
+            excerpt = (r['excerpt'] if 'excerpt' in r.keys() else r['content']) or ''
+        except Exception:
+            excerpt = r[3] if len(r) > 3 else ''
+        if excerpt and len(excerpt) > max_chars:
+            excerpt = excerpt[:max_chars]
+        results.append({'id': r['id'], 'title': r['title'], 'filename': r.get('filename') if isinstance(r, dict) else (r[2] if len(r) > 2 else None), 'excerpt': excerpt})
     conn.close()
     return results
 
@@ -166,11 +183,11 @@ def get_document_by_id(doc_id: int):
 def delete_document(doc_id: int) -> bool:
     conn = _connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM Documents WHERE id = ?", (doc_id,))
     try:
-        cur.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+        cur.execute("DELETE FROM Documents WHERE id = ?", (doc_id,))
+        conn.commit()
+        return True
     except Exception:
-        pass
-    conn.commit()
-    conn.close()
-    return True
+        return False
+    finally:
+        conn.close()
