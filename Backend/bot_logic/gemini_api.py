@@ -38,11 +38,12 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
         os.environ.get('GEMINI_BASE_URL') or BASE_URL,
     ]
 
-    # ✅ Candidate models with stable IDs (avoid -latest, use fixed names)
+    # Candidate models to try (avoid '-latest', use stable names)
     candidate_models = [
         os.environ.get('GEMINI_MODEL') or GEMINI_MODEL,
         "models/gemini-1.5-flash",
-        "models/gemini-1.5-pro"
+        "models/gemini-1.5-pro",
+        "models/gemini-pro"
     ]
 
     payload = {
@@ -76,12 +77,12 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
                 resp.raise_for_status()
                 data = resp.json()
 
-                # Parse Gemini response
-                if isinstance(data, dict) and "candidates" in data and len(data["candidates"]) > 0:
+                # Parse Gemini response correctly
+                if "candidates" in data and data["candidates"]:
                     cand0 = data["candidates"][0]
                     if "content" in cand0 and "parts" in cand0["content"]:
                         parts = cand0["content"]["parts"]
-                        if len(parts) > 0 and "text" in parts[0]:
+                        if parts and "text" in parts[0]:
                             return parts[0]["text"]
 
                 return str(data)
@@ -95,3 +96,47 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
 
     print("Generative API: all model/base-url attempts failed. Last error:", last_error_text)
     return "I'm sorry — the configured language model endpoint or model name could not be reached (check GEMINI_MODEL/GEMINI_BASE_URL)."
+
+
+def get_gemini_response_from_source(question, source_text, source_title=None, language_code='en'):
+    """
+    Ask model to answer concisely using source_text only.
+    """
+    lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
+    prompt = (
+        f"You are an assistant. Use ONLY the following source excerpt to answer the question. "
+        f"Do NOT invent facts. If the answer is not present, respond exactly: "
+        f"'I don't see that information in the provided documents.'\n\n"
+        f"Source title: {source_title or 'Source'}\n\n"
+        f"Source excerpt:\n{source_text}\n\n"
+        f"Question: {question}\n"
+        f"Answer in {lang_name}. Be concise — ONE short sentence. "
+        f"At the end include the source title in parentheses."
+    )
+    return call_generative_api(prompt, max_output_tokens=400, temperature=0.05)
+
+
+def get_gemini_response_general(question, language_code='en'):
+    """
+    General fallback when no source excerpt is available.
+    """
+    lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
+    prompt = (
+        f"You are an assistant for university/college info. "
+        f"Answer concisely (ONE short sentence) in {lang_name}. "
+        f"Question: {question}\n"
+        f"If you cannot confidently answer, say: "
+        f"'I don't see that information in the provided documents.'"
+    )
+    return call_generative_api(prompt, max_output_tokens=300, temperature=0.05)
+
+
+def translate_text(text, target_language_code):
+    """
+    Translate text into target language.
+    """
+    if not text:
+        return text
+    lang_name = LANG_CODE_TO_NAME.get(target_language_code, target_language_code)
+    prompt = f"Translate the following text into {lang_name} and keep it short:\n\n{text}"
+    return call_generative_api(prompt, max_output_tokens=300, temperature=0.1)
