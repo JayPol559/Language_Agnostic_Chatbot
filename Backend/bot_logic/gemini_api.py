@@ -1,14 +1,14 @@
 import os
 import requests
 
-# 🔑 Gemini API key (direct set karna chaho to yahan paste kar sakte ho)
+# 🔑 Gemini API key (direct paste kar sakte ho yahan agar env set nahi hai)
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or "YOUR_API_KEY_HERE"
 
-# Default Gemini model
-GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
+# ✅ Sirf working model
+GEMINI_MODEL = "models/gemini-1.5-flash"
 
-# ✅ Correct Base URL (v1beta → v1)
-BASE_URL = os.environ.get('GEMINI_BASE_URL') or "https://generativelanguage.googleapis.com/v1"
+# ✅ Correct Base URL
+BASE_URL = "https://generativelanguage.googleapis.com/v1"
 
 # Language codes mapping
 LANG_CODE_TO_NAME = {
@@ -26,31 +26,17 @@ LANG_CODE_TO_NAME = {
 
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
     """
-    Call Gemini API with the correct format.
-    Endpoint pattern:
-      POST {BASE_URL}/{MODEL}:generateContent?key={API_KEY}
+    Call Gemini API (v1 + gemini-1.5-flash only).
     """
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
 
-    candidate_base_urls = [
-        os.environ.get('GEMINI_BASE_URL') or BASE_URL,
-    ]
-
-    # ✅ Supported models (no -latest, no gemini-pro)
-    candidate_models = [
-        os.environ.get('GEMINI_MODEL') or GEMINI_MODEL,
-        "models/gemini-1.5-flash",
-        "models/gemini-1.5-pro"
-    ]
+    url = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
+    params = {"key": GEMINI_API_KEY}
 
     payload = {
         "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
+            {"parts": [{"text": prompt}]}
         ],
         "generationConfig": {
             "temperature": temperature,
@@ -60,39 +46,24 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
 
     headers = {"Content-Type": "application/json"}
 
-    last_error_text = None
+    try:
+        resp = requests.post(url, params=params, json=payload, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
 
-    for base in candidate_base_urls:
-        for model in candidate_models:
-            url = f"{base.rstrip('/')}/{model}:generateContent"
-            params = {"key": GEMINI_API_KEY}
-            try:
-                resp = requests.post(url, params=params, json=payload, headers=headers, timeout=timeout)
-                if resp.status_code == 404:
-                    last_error_text = resp.text
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
+        # ✅ Parse Gemini response
+        if "candidates" in data and data["candidates"]:
+            cand0 = data["candidates"][0]
+            if "content" in cand0 and "parts" in cand0["content"]:
+                parts = cand0["content"]["parts"]
+                if parts and "text" in parts[0]:
+                    return parts[0]["text"]
 
-                # ✅ Parse Gemini response correctly
-                if "candidates" in data and data["candidates"]:
-                    cand0 = data["candidates"][0]
-                    if "content" in cand0 and "parts" in cand0["content"]:
-                        parts = cand0["content"]["parts"]
-                        if parts and "text" in parts[0]:
-                            return parts[0]["text"]
+        return str(data)
 
-                return str(data)
-
-            except requests.exceptions.HTTPError as http_err:
-                last_error_text = f"{http_err} - response text: {getattr(http_err.response, 'text', '')}"
-                continue
-            except Exception as e:
-                last_error_text = str(e)
-                continue
-
-    print("Generative API: all model/base-url attempts failed. Last error:", last_error_text)
-    return "I'm sorry — the configured language model endpoint or model name could not be reached (check GEMINI_MODEL/GEMINI_BASE_URL)."
+    except Exception as e:
+        print("Generative API call failed:", str(e))
+        return "I'm sorry — the Gemini API call failed."
 
 
 def get_gemini_response_from_source(question, source_text, source_title=None, language_code='en'):
