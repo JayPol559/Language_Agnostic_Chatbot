@@ -1,14 +1,18 @@
 import os
 import requests
 
-# 🔑 Gemini API key (direct paste kar sakte ho yahan agar env set nahi hai)
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or "YOUR_API_KEY_HERE"
+# ========================
+# API Configuration
+# ========================
 
-# ✅ Sirf working model
-GEMINI_MODEL = "models/gemini-1.5-flash"
+# Read API key and model from env (or set directly here for testing)
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
 
-# ✅ Correct Base URL
-BASE_URL = "https://generativelanguage.googleapis.com/v1"
+# ✅ Default Gemini model (v1beta supports this)
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL') or "models/gemini-1.5-flash"
+
+# ✅ Base URL must be v1beta (not v1)
+BASE_URL = os.environ.get('GEMINI_BASE_URL') or "https://generativelanguage.googleapis.com/v1beta"
 
 # Language codes mapping
 LANG_CODE_TO_NAME = {
@@ -24,13 +28,18 @@ LANG_CODE_TO_NAME = {
 }
 
 
+# ========================
+# Core API Caller
+# ========================
+
 def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=30):
     """
-    Call Gemini API (v1 + gemini-1.5-flash only).
+    Call Gemini API with the correct v1beta endpoint and stable model.
     """
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is not set.")
 
+    # ✅ Correct endpoint
     url = f"{BASE_URL}/{GEMINI_MODEL}:generateContent"
     params = {"key": GEMINI_API_KEY}
 
@@ -51,7 +60,7 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
         resp.raise_for_status()
         data = resp.json()
 
-        # ✅ Parse Gemini response
+        # ✅ Parse Gemini response correctly
         if "candidates" in data and data["candidates"]:
             cand0 = data["candidates"][0]
             if "content" in cand0 and "parts" in cand0["content"]:
@@ -66,7 +75,14 @@ def call_generative_api(prompt, max_output_tokens=512, temperature=0.7, timeout=
         return "I'm sorry — the Gemini API call failed."
 
 
+# ========================
+# Functions (kept same names)
+# ========================
+
 def get_gemini_response_from_source(question, source_text, source_title=None, language_code='en'):
+    """
+    Ask model to answer concisely using source_text only.
+    """
     lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
         f"You are an assistant. Use ONLY the following source excerpt to answer the question. "
@@ -82,6 +98,9 @@ def get_gemini_response_from_source(question, source_text, source_title=None, la
 
 
 def get_gemini_response_general(question, language_code='en'):
+    """
+    General fallback when no source excerpt is available.
+    """
     lang_name = LANG_CODE_TO_NAME.get(language_code, language_code)
     prompt = (
         f"You are an assistant for university/college info. "
@@ -94,8 +113,20 @@ def get_gemini_response_general(question, language_code='en'):
 
 
 def translate_text(text, target_language_code):
+    """
+    Translate text into target language.
+    """
     if not text:
         return text
     lang_name = LANG_CODE_TO_NAME.get(target_language_code, target_language_code)
     prompt = f"Translate the following text into {lang_name} and keep it short:\n\n{text}"
     return call_generative_api(prompt, max_output_tokens=300, temperature=0.1)
+
+
+# ========================
+# ✅ Test Run
+# ========================
+if __name__ == "__main__":
+    print("🔹 Testing Gemini API...")
+    reply = call_generative_api("Hello Gemini! Can you write one short welcome message?")
+    print("Response:", reply)
